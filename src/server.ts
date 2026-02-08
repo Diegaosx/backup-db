@@ -68,7 +68,7 @@ app.get("/api/backups", authMiddleware, async (_req: Request, res: Response) => 
   }
 });
 
-app.post("/api/restore", authMiddleware, async (req: Request, res: Response) => {
+app.post("/api/restore", authMiddleware, (req: Request, res: Response) => {
   const { backupKey, databaseUrl } = req.body ?? {};
   if (!backupKey || typeof backupKey !== "string") {
     return res.status(400).json({ error: "backupKey é obrigatório." });
@@ -79,15 +79,23 @@ app.post("/api/restore", authMiddleware, async (req: Request, res: Response) => 
   if (!databaseUrl.startsWith("postgresql://") && !databaseUrl.startsWith("postgres://")) {
     return res.status(400).json({ error: "databaseUrl deve ser uma connection string PostgreSQL (postgresql://...)." });
   }
-  try {
-    const result = await restoreBackup(backupKey, databaseUrl);
-    if (result.ok) {
-      return res.json({ success: true, message: result.message });
-    }
-    return res.status(500).json({ success: false, error: result.message });
-  } catch (err) {
-    return res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
-  }
+  // Restore pode levar vários minutos; executa em segundo plano para evitar 502/timeout do gateway
+  res.status(202).json({
+    success: true,
+    message:
+      "Restauração iniciada em segundo plano. Pode levar alguns minutos. Verifique o banco de destino ou os logs do serviço.",
+  });
+  restoreBackup(backupKey, databaseUrl)
+    .then((result) => {
+      if (result.ok) {
+        console.log("[restore] Concluído:", result.message);
+      } else {
+        console.error("[restore] Falha:", result.message);
+      }
+    })
+    .catch((err) => {
+      console.error("[restore] Erro:", err);
+    });
 });
 
 app.use(express.static(path.join(__dirname, "..", "public")));
