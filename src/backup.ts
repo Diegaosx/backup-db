@@ -1,10 +1,10 @@
-import { exec, execSync } from "child_process";
+import { spawn } from "child_process";
 import {
   S3Client,
   PutObjectCommandInput,
 } from "@aws-sdk/client-s3";
 import { Upload } from "@aws-sdk/lib-storage";
-import { createReadStream, unlink, statSync } from "fs";
+import { createReadStream, createWriteStream, unlink, statSync, existsSync } from "fs";
 import { filesize } from "filesize";
 import path from "path";
 import os from "os";
@@ -62,41 +62,96 @@ const uploadToR2 = async ({
 const dumpToFile = async (filePath: string) => {
   console.log("Exportando banco para arquivo...");
 
-  await new Promise((resolve, reject) => {
-    exec(
-      `pg_dump --dbname=${env.BACKUP_DATABASE_URL} --format=tar ${env.BACKUP_OPTIONS} | gzip > ${filePath}`,
-      (error, stdout, stderr) => {
-        if (error) {
-          reject({ error, stderr: stderr?.trimEnd() });
+  const pgDumpArgs = [
+    "--dbname",
+    env.BACKUP_DATABASE_URL,
+    "--format=tar",
+    ...(env.BACKUP_OPTIONS ? env.BACKUP_OPTIONS.trim().split(/\s+/) : []),
+  ].filter(Boolean);
+
+  await new Promise<void>((resolve, reject) => {
+    const pgDump = spawn("pg_dump", pgDumpArgs, {
+      stdio: ["inherit", "pipe", "pipe"],
+    });
+
+    const gzip = spawn("gzip", [], {
+      stdio: ["pipe", "pipe", "inherit"],
+    });
+
+    const outFile = createWriteStream(filePath);
+
+    let stderr = "";
+    pgDump.stderr?.on("data", (chunk: Buffer) => {
+      const text = chunk.toString();
+      stderr += text;
+      process.stderr.write(chunk);
+    });
+
+    pgDump.stdout?.pipe(gzip.stdin!);
+    gzip.stdout?.pipe(outFile);
+
+    const onError = (err: Error) => {
+      outFile.destroy();
+      if (existsSync(filePath)) unlink(filePath, () => {});
+      reject(err);
+    };
+
+    pgDump.on("error", onError);
+    gzip.on("error", onError);
+
+    let done = false;
+
+    pgDump.on("close", (pgCode) => {
+      if (pgCode !== 0) {
+        done = true;
+        outFile.destroy();
+        if (existsSync(filePath)) unlink(filePath, () => {});
+        reject(
+          new Error(
+            `pg_dump encerrou com código ${pgCode}. ${stderr ? `stderr: ${stderr.trimEnd()}` : "Verifique BACKUP_DATABASE_URL e conectividade."}`
+          )
+        );
+        return;
+      }
+      const checkAndResolve = () => {
+        if (done) return;
+        if (!existsSync(filePath) || statSync(filePath).size === 0) {
+          reject(
+            new Error(
+              "Arquivo de backup ficou vazio. " +
+                (stderr ? `stderr pg_dump: ${stderr.trimEnd()}` : "Verifique BACKUP_DATABASE_URL.")
+            )
+          );
+          done = true;
           return;
         }
-
-        const isValidArchive =
-          execSync(`gzip -cd ${filePath} | head -c1`).length === 1;
-        if (!isValidArchive) {
-          reject({
-            error:
-              "Arquivo de backup inválido ou vazio; verifique erros acima",
-          });
-          return;
-        }
-
-        if (stderr != "") {
-          console.log({ stderr: stderr.trimEnd() });
-        }
-
+        done = true;
         console.log("Arquivo de backup válido.");
         console.log("Tamanho:", filesize(statSync(filePath).size));
-
-        if (stderr != "") {
-          console.log(
-            `Possíveis avisos; confira se "${path.basename(filePath)}" contém todos os dados necessários.`
-          );
+        if (stderr) {
+          console.log("Avisos pg_dump:", stderr.trimEnd());
         }
-
-        resolve(undefined);
+        resolve();
+      };
+      if ((outFile as NodeJS.WritableStream & { writableFinished?: boolean }).writableFinished) {
+        setImmediate(checkAndResolve);
+      } else {
+        outFile.once("finish", checkAndResolve);
       }
-    );
+    });
+
+    gzip.on("close", (code) => {
+      if (code !== 0) {
+        done = true;
+        outFile.destroy();
+        if (existsSync(filePath)) unlink(filePath, () => {});
+        reject(
+          new Error(
+            `gzip encerrou com código ${code}. ${stderr ? `stderr pg_dump: ${stderr.trimEnd()}` : ""}`
+          )
+        );
+      }
+    });
   });
 
   console.log("Exportação concluída.");
