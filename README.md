@@ -9,8 +9,8 @@ Os arquivos são salvos no bucket na pasta **`backup-db`** (subpasta configuráv
 
 | Variável | Obrigatório | Descrição |
 |----------|-------------|-----------|
-| `CLOUDFLARE_R2_ACCESS_KEY_ID` | Sim | Access Key ID do R2 |
-| `CLOUDFLARE_R2_SECRET_ACCESS_KEY` | Sim | Secret Access Key do R2 |
+| `CLOUDFLARE_R2_ACCESS_KEY_ID` | Sim | Access Key ID do R2 (**~32 caracteres**). Não use o Secret aqui. |
+| `CLOUDFLARE_R2_SECRET_ACCESS_KEY` | Sim | Secret Access Key do R2 (**~64 caracteres**). Não use o Access Key ID aqui. |
 | `CLOUDFLARE_R2_BUCKET_NAME` | Sim | Nome do bucket (ex: `auc`) |
 | `CLOUDFLARE_R2_ENDPOINT` | Sim | Endpoint **seguro** do R2, ex: `https://<ACCOUNT_ID>.r2.cloudflarestorage.co` — **não use a URL pública** |
 | `BACKUP_DATABASE_URL` | Sim | Connection string do PostgreSQL |
@@ -22,6 +22,8 @@ Os arquivos são salvos no bucket na pasta **`backup-db`** (subpasta configuráv
 | `SUPPORT_OBJECT_LOCK` | Não | Habilita MD5 para object lock |
 | `BACKUP_OPTIONS` | Não | Opções extras do `pg_dump` |
 | `PG_VERSION` | Não | Versão do cliente PostgreSQL no Docker (padrão: `17`). Deve ser **igual ou maior** que a versão do servidor. |
+
+**Credenciais R2:** No painel do Cloudflare (R2 → Manage R2 API Tokens), o **Access Key ID** é o valor **curto** (~32 caracteres) e o **Secret Access Key** é o valor **longo** (~64 caracteres). Se aparecer erro "access key has length 128, should be 32", as duas variáveis estão trocadas.
 
 **Nota:** `CLOUDFLARE_R2_PUBLIC_URL` e `CLOUDFLARE_R2_PUBLIC_URL_IMOVEIS` **não são usadas** neste app; o upload é feito sempre pelo endpoint seguro (`CLOUDFLARE_R2_ENDPOINT`).
 

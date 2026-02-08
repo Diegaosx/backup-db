@@ -1,11 +1,11 @@
 import { envsafe, str, bool } from "envsafe";
 
-export const env = envsafe({
+const raw = envsafe({
   CLOUDFLARE_R2_ACCESS_KEY_ID: str({
-    desc: "Cloudflare R2 access key ID.",
+    desc: "Cloudflare R2 access key ID (cerca de 32 caracteres).",
   }),
   CLOUDFLARE_R2_SECRET_ACCESS_KEY: str({
-    desc: "Cloudflare R2 secret access key.",
+    desc: "Cloudflare R2 secret access key (cerca de 64 caracteres).",
   }),
   CLOUDFLARE_R2_BUCKET_NAME: str({
     desc: "Nome do bucket R2 onde os backups serão salvos.",
@@ -50,3 +50,25 @@ export const env = envsafe({
     allowEmpty: true,
   }),
 });
+
+// R2/S3: Access Key ID tem ~32 caracteres; Secret tem ~64. Trocar os dois causa "access key has length 128, should be 32".
+function validateR2Credentials() {
+  const id = raw.CLOUDFLARE_R2_ACCESS_KEY_ID;
+  const secret = raw.CLOUDFLARE_R2_SECRET_ACCESS_KEY;
+  if (id.length > 50) {
+    throw new Error(
+      `CLOUDFLARE_R2_ACCESS_KEY_ID tem ${id.length} caracteres; o esperado é ~32. ` +
+        "Você pode ter colado o Secret no lugar do Access Key ID. No Cloudflare: R2 → Manage R2 API Tokens → o valor curto é Access Key ID, o longo é Secret Access Key."
+    );
+  }
+  if (secret.length < 40 && secret.length > 0) {
+    throw new Error(
+      `CLOUDFLARE_R2_SECRET_ACCESS_KEY tem ${secret.length} caracteres; o esperado é ~64. ` +
+        "Confira se não inverteu com o Access Key ID."
+    );
+  }
+}
+
+validateR2Credentials();
+
+export const env = raw;
