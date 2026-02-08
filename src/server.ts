@@ -11,11 +11,13 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
 
 // Evita crash por EPIPE quando o cliente (ex.: health check do Railway) fecha a conexão antes da resposta
-app.use((_req, res, next) => {
-  res.on("error", (err: NodeJS.ErrnoException) => {
-    if (err.code === "EPIPE" || err.errno === -32) return;
-    console.error("res error:", err);
-  });
+app.use((req, res, next) => {
+  const ignoreEpipe = (err: NodeJS.ErrnoException) => {
+    if (err?.code === "EPIPE" || err?.errno === -32) return;
+    console.error("socket/res error:", err);
+  };
+  res.on("error", ignoreEpipe);
+  req.socket?.on("error", ignoreEpipe);
   next();
 });
 
@@ -107,6 +109,12 @@ const port = Number(env.PORT) || 3000;
 export function startRestoreServer() {
   const server = app.listen(port, "0.0.0.0", () => {
     console.log(`Servidor de restore em http://0.0.0.0:${port}`);
+  });
+  server.on("connection", (socket: import("net").Socket) => {
+    socket.on("error", (err: NodeJS.ErrnoException) => {
+      if (err?.code === "EPIPE" || err?.errno === -32) return;
+      console.error("connection error:", err);
+    });
   });
   server.on("clientError", (err: Error, socket: import("stream").Duplex) => {
     socket.destroy();
