@@ -1,4 +1,5 @@
-ARG NODE_VERSION='20.11.1'
+ARG NODE_VERSION=20.11.1
+ARG PG_VERSION=17
 
 FROM node:${NODE_VERSION}-alpine AS build
 
@@ -15,7 +16,6 @@ RUN npm ci && \
   npm prune --production
 
 # Runtime: postgres:17-alpine já traz pg_dump 17; instalamos só Node
-ARG PG_VERSION='17'
 FROM postgres:${PG_VERSION}-alpine
 
 RUN apk add --no-cache nodejs npm
