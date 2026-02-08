@@ -56,3 +56,55 @@ docker run --env-file .env backup-db
 - Bucket: o definido em `CLOUDFLARE_R2_BUCKET_NAME`
 - Pasta: `backup-db` (ou o valor de `BUCKET_SUBFOLDER`)
 - Exemplo de key no R2: `backup-db/backup-2025-02-07T12-00-00-000Z.tar.gz`
+
+## Restaurar em um PostgreSQL novo
+
+O backup é um dump em formato **tar** compactado com **gzip** (`.tar.gz`). Para restaurar em um banco novo:
+
+### 1. Baixar o arquivo do R2
+
+- **Pelo painel do Cloudflare:** R2 → seu bucket → pasta `backup-db` → clique no objeto → Download.
+- **Pela linha de comando (AWS CLI compatível com R2):**
+  ```bash
+  export AWS_ACCESS_KEY_ID="seu_access_key_id"
+  export AWS_SECRET_ACCESS_KEY="sua_secret_access_key"
+  aws s3 cp s3://SEU_BUCKET/backup-db/backup-XXXX.tar.gz . --endpoint-url https://SEU_ACCOUNT_ID.r2.cloudflarestorage.com
+  ```
+
+### 2. Criar o banco no PostgreSQL de destino
+
+No servidor onde você quer restaurar (Postgres novo, Railway, etc.):
+
+```bash
+# Se tiver psql/createdb na máquina (ou dentro do container do Postgres):
+createdb -h HOST -U USER "nome_do_banco_novo"
+# ou via psql:
+psql -h HOST -U USER -d postgres -c "CREATE DATABASE nome_do_banco_novo;"
+```
+
+Use o mesmo usuário que terá permissão para criar tabelas e objetos.
+
+### 3. Restaurar o dump
+
+Na máquina onde está o arquivo `.tar.gz`, com cliente PostgreSQL instalado (ex.: `postgresql-client` no Alpine/Linux ou pg no Windows):
+
+```bash
+# URL do banco NOVO (onde você quer restaurar)
+export RESTORE_URL="postgresql://USER:PASSWORD@HOST:5432/nome_do_banco_novo"
+
+# Descompacta e restaura (formato tar)
+gunzip -c backup-XXXX.tar.gz | pg_restore -d "$RESTORE_URL" --no-owner --no-acl
+```
+
+- **`--no-owner`** — não tenta recriar os donos originais (evita erro se o usuário do banco antigo não existir no novo).
+- **`--no-acl`** — ignora ACLs do dump (recomendado em ambiente novo).
+
+Se aparecer avisos de “already exists” (por exemplo de extensões), em geral pode ignorar. Erros de “permission denied” costumam ser de usuário/role: use um usuário com permissão de criar objetos no banco.
+
+### 4. Conferir
+
+```bash
+psql "$RESTORE_URL" -c "\dt"
+```
+
+Deve listar as tabelas restauradas.
