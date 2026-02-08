@@ -21,7 +21,15 @@ Os arquivos são salvos no bucket na pasta **`backup-db`** (subpasta configuráv
 | `SINGLE_SHOT_MODE` | Não | Se `true`, faz um backup e encerra |
 | `SUPPORT_OBJECT_LOCK` | Não | Habilita MD5 para object lock |
 | `BACKUP_OPTIONS` | Não | Opções extras do `pg_dump` |
+| `BACKUP_VERBOSE` | Não | Se `true`, o log lista cada tabela dumpada (útil para conferir se o backup está completo). |
 | `PG_VERSION` | Não | Versão do cliente PostgreSQL no Docker (padrão: `17`). Deve ser **igual ou maior** que a versão do servidor. |
+
+### Backup menor que o esperado (ex.: banco 2 GB, arquivo 32 MB)
+
+- **`BACKUP_OPTIONS`** — Se tiver `--schema=...`, `--exclude-table=...` ou `--exclude-table-data=...`, parte do banco fica de fora. Confira no Railway se essa variável está vazia ou só com o que você quer.
+- **Banco certo** — Confirme que `BACKUP_DATABASE_URL` aponta para o banco que você acha que tem 2 GB (e não outro DB do mesmo cluster).
+- **Tamanho no disco vs lógico** — Os 2 GB costumam ser “tamanho em disco” (índices, TOAST, bloat). O dump lógico + gzip pode ser bem menor, mas 32 MB ainda é uma redução forte; vale checar os itens acima.
+- **Ver o que entrou no dump** — Defina `BACKUP_VERBOSE=true`, rode um backup e veja no log do Railway a lista de tabelas dumpadas. Assim você confere se as tabelas grandes estão incluídas.
 
 **Credenciais R2:** No painel do Cloudflare (R2 → Manage R2 API Tokens), o **Access Key ID** é o valor **curto** (~32 caracteres) e o **Secret Access Key** é o valor **longo** (~64 caracteres). Se aparecer erro "access key has length 128, should be 32", as duas variáveis estão trocadas.
 

@@ -49,6 +49,11 @@ const raw = envsafe({
     default: "",
     allowEmpty: true,
   }),
+  BACKUP_VERBOSE: bool({
+    desc: "Se true, pg_dump usa --verbose (lista tabelas no log). Útil para conferir se o dump está completo.",
+    default: false,
+    allowEmpty: true,
+  }),
 });
 
 // R2/S3: Access Key ID tem ~32 caracteres; Secret tem ~64. Trocar os dois causa "access key has length 128, should be 32".

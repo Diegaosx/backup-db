@@ -66,6 +66,7 @@ const dumpToFile = async (filePath: string) => {
     "--dbname",
     env.BACKUP_DATABASE_URL,
     "--format=tar",
+    ...(env.BACKUP_VERBOSE ? ["--verbose"] : []),
     ...(env.BACKUP_OPTIONS ? env.BACKUP_OPTIONS.trim().split(/\s+/) : []),
   ].filter(Boolean);
 
