@@ -21,6 +21,7 @@ Os arquivos são salvos no bucket na pasta **`backup-db`** (subpasta configuráv
 | `SINGLE_SHOT_MODE` | Não | Se `true`, faz um backup e encerra |
 | `SUPPORT_OBJECT_LOCK` | Não | Habilita MD5 para object lock |
 | `BACKUP_OPTIONS` | Não | Opções extras do `pg_dump` |
+| `PG_VERSION` | Não | Versão do cliente PostgreSQL no Docker (padrão: `17`). Deve ser **igual ou maior** que a versão do servidor. |
 
 **Nota:** `CLOUDFLARE_R2_PUBLIC_URL` e `CLOUDFLARE_R2_PUBLIC_URL_IMOVEIS` **não são usadas** neste app; o upload é feito sempre pelo endpoint seguro (`CLOUDFLARE_R2_ENDPOINT`).
 
