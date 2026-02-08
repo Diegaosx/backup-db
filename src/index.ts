@@ -1,8 +1,13 @@
 import { CronJob } from "cron";
 import { backup } from "./backup.js";
 import { env } from "./env.js";
+import { startRestoreServer } from "./server.js";
 
 console.log("Node:", process.version);
+
+if (env.RESTORE_ENABLED) {
+  startRestoreServer();
+}
 
 const tryBackup = async () => {
   try {

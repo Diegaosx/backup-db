@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Restaurar backup — backup-db</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,600;1,9..40,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #0d0f12;
+      --surface: #161a20;
+      --border: #2a3038;
+      --text: #e6edf3;
+      --muted: #8b949e;
+      --accent: #58a6ff;
+      --success: #3fb950;
+      --error: #f85149;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: 'DM Sans', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 1.5rem;
+    }
+    .card {
+      width: 100%;
+      max-width: 480px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.75rem;
+    }
+    h1 {
+      font-size: 1.25rem;
+      font-weight: 600;
+      margin: 0 0 0.25rem 0;
+    }
+    .sub {
+      color: var(--muted);
+      font-size: 0.875rem;
+      margin-bottom: 1.5rem;
+    }
+    label {
+      display: block;
+      font-size: 0.8125rem;
+      font-weight: 600;
+      margin-bottom: 0.375rem;
+      color: var(--muted);
+    }
+    input, select, textarea, button {
+      font: inherit;
+      width: 100%;
+      padding: 0.625rem 0.75rem;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--bg);
+      color: var(--text);
+      margin-bottom: 1rem;
+    }
+    input::placeholder, textarea::placeholder { color: var(--muted); }
+    input:focus, select:focus, textarea:focus {
+      outline: none;
+      border-color: var(--accent);
+    }
+    button {
+      cursor: pointer;
+      font-weight: 600;
+      background: var(--accent);
+      color: var(--bg);
+      border: none;
+      padding: 0.75rem 1rem;
+      margin-bottom: 0;
+    }
+    button:hover { opacity: 0.9; }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+    .msg {
+      font-size: 0.875rem;
+      padding: 0.5rem 0.75rem;
+      border-radius: 8px;
+      margin-top: 1rem;
+    }
+    .msg.error { background: rgba(248,81,73,0.15); color: var(--error); }
+    .msg.success { background: rgba(63,185,80,0.15); color: var(--success); }
+    .msg.info { background: rgba(88,166,255,0.1); color: var(--accent); }
+    #restoreSection { display: none; }
+    #restoreSection.visible { display: block; }
+    #loginSection.visible { display: none; }
+    .backup-row {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.8125rem;
+      padding: 0.5rem 0;
+      border-bottom: 1px solid var(--border);
+    }
+    .backup-row:last-child { border-bottom: none; }
+    textarea { min-height: 80px; resize: vertical; }
+  </style>
+</head>
+<body>
+  <div class="card" id="loginSection">
+    <h1>Restaurar backup</h1>
+    <p class="sub">Entre com sua API Key para continuar.</p>
+    <form id="loginForm">
+      <label for="apiKey">API Key</label>
+      <input type="password" id="apiKey" name="apiKey" placeholder="Sua API_KEY" autocomplete="off" required>
+      <button type="submit">Entrar</button>
+    </form>
+    <div id="loginMsg" class="msg" style="display:none"></div>
+  </div>
+
+  <div class="card" id="restoreSection">
+    <h1>Restaurar em um PostgreSQL</h1>
+    <p class="sub">Escolha o backup e informe a URL do banco de destino.</p>
+    <form id="restoreForm">
+      <label for="backupKey">Backup</label>
+      <select id="backupKey" name="backupKey" required>
+        <option value="">Carregando...</option>
+      </select>
+      <label for="databaseUrl">URL do banco de destino (DATABASE_URL)</label>
+      <textarea id="databaseUrl" name="databaseUrl" placeholder="postgresql://user:password@host:5432/database" required></textarea>
+      <button type="submit" id="restoreBtn">Restaurar</button>
+    </form>
+    <div id="restoreMsg" class="msg" style="display:none"></div>
+    <p style="margin-top:1rem;"><a href="#" id="logoutLink" style="color:var(--muted);font-size:0.875rem;">Sair</a></p>
+  </div>
+
+  <script>
+    const API_BASE = '';
+    const TOKEN_KEY = 'restore_token';
+
+    function getToken() { return sessionStorage.getItem(TOKEN_KEY); }
+    function setToken(t) { sessionStorage.setItem(TOKEN_KEY, t); }
+    function clearToken() { sessionStorage.removeItem(TOKEN_KEY); }
+
+    function headers() {
+      const t = getToken();
+      return {
+        'Content-Type': 'application/json',
+        ...(t ? { 'Authorization': 'Bearer ' + t } : {}),
+      };
+    }
+
+    function showMsg(el, text, type) {
+      el.textContent = text;
+      el.className = 'msg ' + type;
+      el.style.display = 'block';
+    }
+    function hideMsg(el) { el.style.display = 'none'; }
+
+    document.getElementById('loginForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const apiKey = document.getElementById('apiKey').value.trim();
+      const msgEl = document.getElementById('loginMsg');
+      try {
+        const r = await fetch(API_BASE + '/api/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ apiKey }),
+        });
+        const data = await r.json().catch(() => ({}));
+        if (!r.ok) {
+          showMsg(msgEl, data.error || 'Falha no login', 'error');
+          return;
+        }
+        setToken(data.token);
+        document.getElementById('loginSection').classList.remove('visible');
+        document.getElementById('restoreSection').classList.add('visible');
+        hideMsg(msgEl);
+        loadBackups();
+      } catch (err) {
+        showMsg(msgEl, 'Erro de rede: ' + err.message, 'error');
+      }
+    });
+
+    document.getElementById('logoutLink').addEventListener('click', (e) => {
+      e.preventDefault();
+      clearToken();
+      document.getElementById('restoreSection').classList.remove('visible');
+      document.getElementById('loginSection').classList.add('visible');
+      document.getElementById('restoreMsg').style.display = 'none';
+    });
+
+    async function loadBackups() {
+      const select = document.getElementById('backupKey');
+      try {
+        const r = await fetch(API_BASE + '/api/backups', { headers: headers() });
+        if (!r.ok) throw new Error(await r.text());
+        const { backups } = await r.json();
+        select.innerHTML = backups.length
+          ? backups.map(b => `<option value="${escapeHtml(b.key)}">${escapeHtml(b.name)} (${formatSize(b.size)})</option>`).join('')
+          : '<option value="">Nenhum backup encontrado</option>';
+      } catch (err) {
+        select.innerHTML = '<option value="">Erro ao carregar</option>';
+      }
+    }
+
+    function escapeHtml(s) {
+      const d = document.createElement('div');
+      d.textContent = s;
+      return d.innerHTML;
+    }
+    function formatSize(n) {
+      if (n >= 1e9) return (n / 1e9).toFixed(1) + ' GB';
+      if (n >= 1e6) return (n / 1e6).toFixed(1) + ' MB';
+      if (n >= 1e3) return (n / 1e3).toFixed(1) + ' KB';
+      return n + ' B';
+    }
+
+    document.getElementById('restoreForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const backupKey = document.getElementById('backupKey').value;
+      const databaseUrl = document.getElementById('databaseUrl').value.trim();
+      const btn = document.getElementById('restoreBtn');
+      const msgEl = document.getElementById('restoreMsg');
+      if (!backupKey || !databaseUrl) return;
+      btn.disabled = true;
+      hideMsg(msgEl);
+      showMsg(msgEl, 'Restaurando... pode levar alguns minutos.', 'info');
+      try {
+        const r = await fetch(API_BASE + '/api/restore', {
+          method: 'POST',
+          headers: headers(),
+          body: JSON.stringify({ backupKey, databaseUrl }),
+        });
+        const data = await r.json().catch(() => ({}));
+        if (r.ok && data.success) {
+          showMsg(msgEl, data.message || 'Restauração concluída.', 'success');
+        } else {
+          showMsg(msgEl, data.error || data.message || 'Falha na restauração.', 'error');
+        }
+      } catch (err) {
+        showMsg(msgEl, 'Erro: ' + err.message, 'error');
+      }
+      btn.disabled = false;
+    });
+
+    (function init() {
+      if (getToken()) {
+        document.getElementById('loginSection').classList.add('visible');
+        document.getElementById('restoreSection').classList.add('visible');
+        loadBackups();
+      }
+    })();
+  </script>
+</body>
+</html>

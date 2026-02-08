@@ -23,6 +23,11 @@ Os arquivos são salvos no bucket na pasta **`backup-db`** (subpasta configuráv
 | `BACKUP_OPTIONS` | Não | Opções extras do `pg_dump` |
 | `BACKUP_VERBOSE` | Não | Se `true`, o log lista cada tabela dumpada (útil para conferir se o backup está completo). |
 | `PG_VERSION` | Não | Versão do cliente PostgreSQL no Docker (padrão: `17`). Deve ser **igual ou maior** que a versão do servidor. |
+| **Restaurar (frontend)** | | |
+| `RESTORE_ENABLED` | Não | Se `true`, sobe o servidor HTTP com frontend e API de restauração (padrão: `false`). |
+| `API_KEY` | Se restore | Chave para autenticar no frontend/API (login e header `x-api-key`). Mínimo 16 caracteres. |
+| `JWT_SECRET` | Se restore | Segredo para assinar JWTs do login. Mínimo 16 caracteres. |
+| `PORT` | Não | Porta do servidor HTTP quando `RESTORE_ENABLED=true` (padrão: `3000`; Railway define `PORT`). |
 
 ### Backup menor que o esperado (ex.: banco 2 GB, arquivo 32 MB)
 
@@ -34,6 +39,19 @@ Os arquivos são salvos no bucket na pasta **`backup-db`** (subpasta configuráv
 **Credenciais R2:** No painel do Cloudflare (R2 → Manage R2 API Tokens), o **Access Key ID** é o valor **curto** (~32 caracteres) e o **Secret Access Key** é o valor **longo** (~64 caracteres). Se aparecer erro "access key has length 128, should be 32", as duas variáveis estão trocadas.
 
 **Nota:** `CLOUDFLARE_R2_PUBLIC_URL` e `CLOUDFLARE_R2_PUBLIC_URL_IMOVEIS` **não são usadas** neste app; o upload é feito sempre pelo endpoint seguro (`CLOUDFLARE_R2_ENDPOINT`).
+
+## Restaurar pelo frontend (RESTORE_ENABLED=true)
+
+1. No Railway (ou onde rodar), defina:
+   - `RESTORE_ENABLED=true`
+   - `API_KEY` = uma chave secreta (ex.: 32 caracteres)
+   - `JWT_SECRET` = outro segredo para JWTs (ex.: 32 caracteres)
+   - O Railway já define `PORT`; em local use `PORT=3000` ou deixe o padrão.
+2. Acesse a URL do serviço (ex.: `https://backup-db.railway.app`). Abre a tela de login.
+3. **Login:** informe a mesma `API_KEY` que está na variável. Ao validar, você recebe um JWT e entra na tela de restore.
+4. **Restaurar:** escolha o backup na lista (vinda do R2), cole a **DATABASE_URL** do Postgres de destino (ex.: `postgresql://user:pass@host:5432/db`) e clique em **Restaurar**. O app baixa o backup do R2 e roda `pg_restore` contra essa URL.
+
+A API também aceita autenticação por header **`x-api-key`** (valor = `API_KEY`) em `GET /api/backups` e `POST /api/restore`, para uso por scripts ou outros serviços.
 
 ## Desenvolvimento
 

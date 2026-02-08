@@ -54,6 +54,26 @@ const raw = envsafe({
     default: false,
     allowEmpty: true,
   }),
+  RESTORE_ENABLED: bool({
+    desc: "Se true, sobe o servidor HTTP com frontend e API de restauração.",
+    default: false,
+    allowEmpty: true,
+  }),
+  API_KEY: str({
+    desc: "Chave para autenticar no frontend/API de restore (obrigatória se RESTORE_ENABLED=true).",
+    default: "",
+    allowEmpty: true,
+  }),
+  JWT_SECRET: str({
+    desc: "Segredo para assinar JWTs do login (obrigatório se RESTORE_ENABLED=true).",
+    default: "",
+    allowEmpty: true,
+  }),
+  PORT: str({
+    desc: "Porta do servidor HTTP (usada quando RESTORE_ENABLED=true). Railway define PORT automaticamente.",
+    default: "3000",
+    allowEmpty: true,
+  }),
 });
 
 // R2/S3: Access Key ID tem ~32 caracteres; Secret tem ~64. Trocar os dois causa "access key has length 128, should be 32".
@@ -75,5 +95,14 @@ function validateR2Credentials() {
 }
 
 validateR2Credentials();
+
+if (raw.RESTORE_ENABLED) {
+  if (!raw.API_KEY || raw.API_KEY.length < 16) {
+    throw new Error("Quando RESTORE_ENABLED=true, defina API_KEY com pelo menos 16 caracteres.");
+  }
+  if (!raw.JWT_SECRET || raw.JWT_SECRET.length < 16) {
+    throw new Error("Quando RESTORE_ENABLED=true, defina JWT_SECRET com pelo menos 16 caracteres.");
+  }
+}
 
 export const env = raw;

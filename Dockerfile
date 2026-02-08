@@ -25,5 +25,6 @@ WORKDIR /app
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist
 COPY --from=build /app/package.json ./
+COPY public ./public
 
 CMD ["/bin/sh", "-c", "pg_isready --dbname=$BACKUP_DATABASE_URL && pg_dump --version && node dist/index.js"]
